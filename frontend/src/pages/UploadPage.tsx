@@ -51,43 +51,45 @@ const UploadPage = () => {
   };
 
   return (
-    <div className="upload-page">
-      <h1>Importer un Document</h1>
-      <p className="description">
-        Importez un fichier PDF, DOCX ou ZIP (SCORM) pour générer des questions de quiz.
-      </p>
-      
-      <form onSubmit={handleSubmit} className="upload-form">
-        <div className="file-input-container">
-          <input
-            type="file"
-            id="file-upload"
-            onChange={handleFileChange}
-            accept=".pdf,.docx,.zip"
-            disabled={isUploading}
-          />
-          <label htmlFor="file-upload" className="file-input-label">
-            {file ? file.name : 'Choisir un fichier'}
-          </label>
-        </div>
+    <div className="upload-page-container">
+      <div className="upload-page-content">
+        <h1>Importer un Document</h1>
+        <p className="description">
+          Importez un fichier PDF, DOCX ou ZIP (SCORM) pour générer des questions de quiz.
+        </p>
         
-        {file && (
-          <div className="file-info">
-            <p>Nom: {file.name}</p>
-            <p>Taille: {(file.size / 1024).toFixed(2)} KB</p>
+        <form onSubmit={handleSubmit} className="upload-form">
+          <div className="file-input-container">
+            <input
+              type="file"
+              id="file-upload"
+              onChange={handleFileChange}
+              accept=".pdf,.docx,.zip"
+              disabled={isUploading}
+            />
+            <label htmlFor="file-upload" className="file-input-label">
+              {file ? file.name : 'Choisir un fichier'}
+            </label>
           </div>
-        )}
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <button 
-          type="submit" 
-          className="submit-button"
-          disabled={!file || isUploading}
-        >
-          {isUploading ? 'Importation en cours...' : 'Importer'}
-        </button>
-      </form>
+          
+          {file && (
+            <div className="file-info">
+              <p>Nom: {file.name}</p>
+              <p>Taille: {(file.size / 1024).toFixed(2)} KB</p>
+            </div>
+          )}
+          
+          {error && <div className="error-message">{error}</div>}
+          
+          <button 
+            type="submit" 
+            className="submit-button"
+            disabled={!file || isUploading}
+          >
+            {isUploading ? 'Importation en cours...' : 'Importer'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
