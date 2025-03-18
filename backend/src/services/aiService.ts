@@ -1,15 +1,26 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
 import { Question, QuestionType, TestMode, Difficulty, Answer } from '../models/types';
 import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// Reload environment variables directly in this file to ensure they are available
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
 
 // Azure OpenAI Configuration
 const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY;
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
 const AZURE_OPENAI_DEPLOYMENT_NAME = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
 const AZURE_OPENAI_API_VERSION = '2023-05-15'; // Azure OpenAI API version
+
+// Log environment variables (without sensitive values)
+console.log('aiService - Environment variables:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('USE_FALLBACK_QUESTIONS:', process.env.USE_FALLBACK_QUESTIONS);
+console.log('AZURE_OPENAI_ENDPOINT:', AZURE_OPENAI_ENDPOINT);
+console.log('AZURE_OPENAI_DEPLOYMENT_NAME:', AZURE_OPENAI_DEPLOYMENT_NAME);
+console.log('AZURE_OPENAI_KEY is set:', !!AZURE_OPENAI_KEY);
 
 /**
  * Generate a prompt for the AI based on document content and question parameters
@@ -171,16 +182,30 @@ export async function generateQuestions(
 ): Promise<Question[]> {
   try {
     // Check if we're in development mode and should use fallback questions
+    console.log('Checking if fallback questions should be used:');
+    console.log('NODE_ENV === development:', process.env.NODE_ENV === 'development');
+    console.log('USE_FALLBACK_QUESTIONS === true:', process.env.USE_FALLBACK_QUESTIONS === 'true');
+    console.log('Combined condition:', process.env.NODE_ENV === 'development' && process.env.USE_FALLBACK_QUESTIONS === 'true');
+    
     if (process.env.NODE_ENV === 'development' && process.env.USE_FALLBACK_QUESTIONS === 'true') {
+      console.log('Using fallback questions due to environment configuration');
       return generateFallbackQuestions(docId, questionType, testMode, difficulty);
     }
     
     if (!AZURE_OPENAI_KEY || !AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_DEPLOYMENT_NAME) {
       console.error('Azure OpenAI configuration is not complete');
+      console.error('AZURE_OPENAI_KEY is set:', !!AZURE_OPENAI_KEY);
+      console.error('AZURE_OPENAI_ENDPOINT is set:', !!AZURE_OPENAI_ENDPOINT);
+      console.error('AZURE_OPENAI_DEPLOYMENT_NAME is set:', !!AZURE_OPENAI_DEPLOYMENT_NAME);
       throw new Error('Azure OpenAI configuration is not complete');
     }
 
     console.log(`Generating questions for document ${docId} with type ${questionType}, mode ${testMode}, difficulty ${difficulty}`);
+    console.log('Using Azure OpenAI API with the following configuration:');
+    console.log('AZURE_OPENAI_ENDPOINT:', AZURE_OPENAI_ENDPOINT);
+    console.log('AZURE_OPENAI_DEPLOYMENT_NAME:', AZURE_OPENAI_DEPLOYMENT_NAME);
+    console.log('AZURE_OPENAI_API_VERSION:', AZURE_OPENAI_API_VERSION);
+    
     const prompt = generatePrompt(documentContent, questionType, testMode, difficulty);
 
     // Add retry logic for Azure OpenAI API

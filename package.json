@@ -12,7 +12,12 @@
     "test:frontend": "cd frontend && npm test",
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
-  "keywords": ["quiz", "ai", "claude", "poc"],
+  "keywords": [
+    "quiz",
+    "ai",
+    "claude",
+    "poc"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {

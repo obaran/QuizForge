@@ -5,8 +5,33 @@ import path from 'path';
 import quizRoutes from './routes/quizRoutes';
 import { initializeDatabase } from './utils/db';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from .env file in the backend directory
+// This needs to be at the very top before any other code executes
+const envPath = path.resolve(__dirname, '../.env');
+const result = dotenv.config({ path: envPath });
+
+if (result.error) {
+  console.error('Error loading .env file:', result.error);
+} else {
+  console.log(`Loaded environment variables from: ${envPath}`);
+}
+
+// Set default values for development
+if (process.env.NODE_ENV === undefined) {
+  process.env.NODE_ENV = 'development';
+}
+
+if (process.env.USE_FALLBACK_QUESTIONS === undefined) {
+  process.env.USE_FALLBACK_QUESTIONS = 'false';
+}
+
+// Log loaded environment variables (without sensitive values)
+console.log('Environment configuration:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('USE_FALLBACK_QUESTIONS:', process.env.USE_FALLBACK_QUESTIONS);
+console.log('AZURE_OPENAI_ENDPOINT is set:', !!process.env.AZURE_OPENAI_ENDPOINT);
+console.log('AZURE_OPENAI_DEPLOYMENT_NAME is set:', !!process.env.AZURE_OPENAI_DEPLOYMENT_NAME);
+console.log('AZURE_OPENAI_KEY is set:', !!process.env.AZURE_OPENAI_KEY);
 
 // Initialize the database
 initializeDatabase();
