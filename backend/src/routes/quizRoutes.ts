@@ -3,17 +3,25 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { parseFile } from '../services/parseService';
-import { generateQuestions } from '../services/aiService';
-import { exportGift, exportMoodleXml } from '../services/exportService';
 import { 
-  insertDocument, 
   getDocumentById, 
+  insertDocument, 
   insertQuestion, 
-  updateQuestion, 
-  getAllQuestions, 
-  getValidatedQuestions 
+  getQuestionsByDocId,
+  updateQuestion,
+  getValidatedQuestions,
+  getValidatedQuestionsByDocId,
+  getAllQuestions,
+  insertReferentiel,
+  getAllReferentiels,
+  getReferentielById,
+  getAllDocuments,
+  removeDuplicateDocuments,
+  db
 } from '../utils/db';
+import { generateQuestions } from '../services/aiService';
+import { exportGift, exportMoodleXml, exportAiken } from '../services/exportService';
+import { parseFile } from '../services/parseService';
 import { Question, GenerateQuestionsRequest, UpdateQuestionRequest } from '../models/types';
 
 const router = express.Router();
@@ -38,13 +46,31 @@ const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
     // Check file types
-    const allowedExtensions = ['.pdf', '.docx', '.zip'];
+    const allowedExtensions = ['.pdf', '.docx', '.zip', '.txt', '.html'];
     const ext = path.extname(file.originalname).toLowerCase();
     
     if (allowedExtensions.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, DOCX, and ZIP (SCORM) files are allowed.'));
+      cb(new Error('Invalid file type. Only PDF, DOCX, ZIP (SCORM), TXT, and HTML files are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+const referentielUpload = multer({ 
+  storage,
+  fileFilter: (req, file, cb) => {
+    // Check file types for referentiels
+    const allowedExtensions = ['.pdf', '.docx', '.xls', '.xlsx'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type for referentiel. Only PDF, DOCX, XLS, and XLSX files are allowed.'));
     }
   },
   limits: {
@@ -90,21 +116,135 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// POST /api/generate-questions - Generate questions using Claude
+// POST /api/upload-referentiel - Upload a referentiel
+router.post('/upload-referentiel', referentielUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded' 
+      });
+    }
+
+    const filePath = req.file.path;
+    const fileName = req.file.originalname;
+    
+    // Parse the file to extract text content
+    const content = await parseFile(filePath);
+    
+    // Generate a unique ID for the referentiel
+    const refId = uuidv4();
+    
+    // Store the referentiel in the database
+    insertReferentiel(refId, fileName, content);
+    
+    return res.status(201).json({ 
+      success: true, 
+      data: { 
+        refId, 
+        fileName 
+      } 
+    });
+  } catch (error) {
+    console.error('Error uploading referentiel:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to upload referentiel: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/referentiels - Get all referentiels
+router.get('/referentiels', async (req, res) => {
+  try {
+    // Get all referentiels from the database
+    const referentiels = getAllReferentiels();
+    
+    // Map to a simpler format for the frontend
+    const simplifiedReferentiels = referentiels.map(ref => ({
+      id: ref.id,
+      filename: ref.filename,
+      createdAt: ref.createdAt
+    }));
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { referentiels: simplifiedReferentiels } 
+    });
+  } catch (error) {
+    console.error('Error getting referentiels:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to get referentiels: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/documents - Get all documents
+router.get('/documents', async (req, res) => {
+  try {
+    // Get all documents from the database
+    const documents = getAllDocuments();
+    
+    // Map to a simpler format for the frontend
+    const simplifiedDocuments = documents.map(doc => ({
+      docId: doc.id,
+      filename: doc.filename,
+      createdAt: doc.createdAt
+    }));
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { documents: simplifiedDocuments } 
+    });
+  } catch (error) {
+    console.error('Error getting documents:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to get documents: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/cleanup-duplicates - Remove duplicate documents
+router.get('/cleanup-duplicates', async (req, res) => {
+  try {
+    const removedCount = removeDuplicateDocuments();
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { removedCount } 
+    });
+  } catch (error) {
+    console.error('Error cleaning up duplicates:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to clean up duplicates: ${(error as Error).message}` 
+    });
+  }
+});
+
+// POST /api/generate-questions - Generate questions using Azure OpenAI
 router.post('/generate-questions', async (req, res) => {
   try {
     const { docId, questionType, testMode, difficulty } = req.body as GenerateQuestionsRequest;
     
-    // Validate request parameters
-    if (!docId || !questionType || !testMode || !difficulty) {
+    if (!docId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Missing required parameters: docId, questionType, testMode, difficulty' 
+        error: 'Document ID is required' 
       });
     }
     
-    // Get the document from the database
-    const document = getDocumentById(docId);
+    // Get the document by ID or filename
+    let document = getDocumentById(docId);
+    
+    // If document not found by ID, try to find it by filename
+    if (!document) {
+      const allDocuments = getAllDocuments();
+      document = allDocuments.find(doc => doc.filename === docId);
+    }
+    
     if (!document) {
       return res.status(404).json({ 
         success: false, 
@@ -112,29 +252,43 @@ router.post('/generate-questions', async (req, res) => {
       });
     }
     
-    // Generate questions using Claude
-    const questions = await generateQuestions(
-      docId,
-      document.content,
-      questionType,
-      testMode,
-      difficulty
-    );
+    // Use the document content to generate questions
+    const content = document.content;
     
-    // Store the generated questions in the database
+    // Generate questions using the AI service
+    const questions = await generateQuestions(content, questionType, testMode, difficulty, document.id);
+    
+    // Insert questions into the database
+    const insertedQuestions = [];
     for (const question of questions) {
-      try {
-        // Passer directement l'objet question, la conversion en JSON se fait dans insertQuestion
-        insertQuestion(question.id, docId, question);
-      } catch (error) {
-        console.error('Error inserting question:', error);
-        console.error('Question object:', question);
-      }
+      const questionId = uuidv4();
+      const questionContent = JSON.stringify({
+        ...question,
+        id: questionId,
+        docId: document.id
+      });
+      
+      insertQuestion({
+        id: questionId,
+        docId: document.id,
+        content: questionContent,
+        validated: false,
+        createdAt: new Date().toISOString()
+      });
+      
+      insertedQuestions.push({
+        ...question,
+        id: questionId,
+        docId: document.id
+      });
     }
     
     return res.status(200).json({ 
       success: true, 
-      data: { questions } 
+      data: { 
+        questions: insertedQuestions,
+        docId: document.id
+      } 
     });
   } catch (error) {
     console.error('Error generating questions:', error);
@@ -233,11 +387,129 @@ router.get('/questions/:docId', async (req, res) => {
   }
 });
 
-// GET /api/export/gift - Export questions in GIFT format
+// GET /api/export/gift/:docId - Export questions in GIFT format for a specific document
+router.get('/export/gift/:docId', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    
+    // Décodage de l'ID pour gérer les caractères spéciaux
+    const decodedDocId = decodeURIComponent(docId);
+    
+    // Get the document to use its name for the export file
+    const document = getDocumentById(decodedDocId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Document with ID ${decodedDocId} not found` 
+      });
+    }
+    
+    // Get all validated questions for this document
+    const questionRecords = getValidatedQuestionsByDocId(decodedDocId);
+    
+    // Si aucune question validée, retourner un message d'erreur mais avec un code 200
+    // pour que le frontend puisse afficher le message approprié
+    if (questionRecords.length === 0) {
+      return res.status(200).json({ 
+        success: false, 
+        error: `Vous n'avez validé aucune question. Veuillez valider au moins une question avant d'exporter.` 
+      });
+    }
+    
+    const questions = questionRecords.map(q => JSON.parse(q.content));
+    
+    // Generate GIFT format
+    const giftContent = exportGift(questions);
+    
+    // Create a clean filename based on the document name
+    const cleanFilename = document.filename
+      .replace(/\.[^/.]+$/, '') // Remove extension
+      .replace(/[^a-zA-Z0-9_-]/g, '_') // Replace special chars with underscore
+      .substring(0, 50); // Limit length
+    
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename=${cleanFilename}_gift.txt`);
+    
+    // Send the GIFT content
+    res.send(giftContent);
+  } catch (error) {
+    console.error('Error exporting to GIFT:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to export questions in GIFT format' 
+    });
+  }
+});
+
+// GET /api/export/xml/:docId - Export questions in Moodle XML format for a specific document
+router.get('/export/xml/:docId', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    
+    // Décodage de l'ID pour gérer les caractères spéciaux
+    const decodedDocId = decodeURIComponent(docId);
+    
+    // Get the document to use its name for the export file
+    const document = getDocumentById(decodedDocId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Document with ID ${decodedDocId} not found` 
+      });
+    }
+    
+    // Get all validated questions for this document
+    const questionRecords = getValidatedQuestionsByDocId(decodedDocId);
+    
+    // Si aucune question validée, retourner un message d'erreur mais avec un code 200
+    // pour que le frontend puisse afficher le message approprié
+    if (questionRecords.length === 0) {
+      return res.status(200).json({ 
+        success: false, 
+        error: `Vous n'avez validé aucune question. Veuillez valider au moins une question avant d'exporter.` 
+      });
+    }
+    
+    const questions = questionRecords.map(q => JSON.parse(q.content));
+    
+    // Generate Moodle XML format
+    const xmlContent = exportMoodleXml(questions);
+    
+    // Create a clean filename based on the document name
+    const cleanFilename = document.filename
+      .replace(/\.[^/.]+$/, '') // Remove extension
+      .replace(/[^a-zA-Z0-9_-]/g, '_') // Replace special chars with underscore
+      .substring(0, 50); // Limit length
+    
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Content-Disposition', `attachment; filename=${cleanFilename}_moodle.xml`);
+    
+    // Send the XML content
+    res.send(xmlContent);
+  } catch (error) {
+    console.error('Error exporting to Moodle XML:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to export questions in Moodle XML format' 
+    });
+  }
+});
+
+// GET /api/export/gift - Export all validated questions in GIFT format
 router.get('/export/gift', async (req, res) => {
   try {
     // Get all validated questions
     const questionRecords = getValidatedQuestions();
+    
+    if (questionRecords.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No validated questions found' 
+      });
+    }
+    
     const questions = questionRecords.map(q => JSON.parse(q.content));
     
     // Generate GIFT format
@@ -245,7 +517,7 @@ router.get('/export/gift', async (req, res) => {
     
     // Set response headers for file download
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', 'attachment; filename="quiz.gift"');
+    res.setHeader('Content-Disposition', 'attachment; filename="quiz_complet.gift"');
     
     return res.status(200).send(giftContent);
   } catch (error) {
@@ -257,11 +529,19 @@ router.get('/export/gift', async (req, res) => {
   }
 });
 
-// GET /api/export/xml - Export questions in Moodle XML format
+// GET /api/export/xml - Export all validated questions in Moodle XML format
 router.get('/export/xml', async (req, res) => {
   try {
     // Get all validated questions
     const questionRecords = getValidatedQuestions();
+    
+    if (questionRecords.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No validated questions found' 
+      });
+    }
+    
     const questions = questionRecords.map(q => JSON.parse(q.content));
     
     // Generate Moodle XML format
@@ -269,7 +549,7 @@ router.get('/export/xml', async (req, res) => {
     
     // Set response headers for file download
     res.setHeader('Content-Type', 'application/xml');
-    res.setHeader('Content-Disposition', 'attachment; filename="quiz.xml"');
+    res.setHeader('Content-Disposition', 'attachment; filename="quiz_complet.xml"');
     
     return res.status(200).send(xmlContent);
   } catch (error) {
@@ -277,6 +557,202 @@ router.get('/export/xml', async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       error: `Failed to export XML: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/export/aiken/:docId - Export questions in Aiken format for a specific document
+router.get('/export/aiken/:docId', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    
+    // Décodage de l'ID pour gérer les caractères spéciaux
+    const decodedDocId = decodeURIComponent(docId);
+    
+    // Get the document to use its name for the export file
+    const document = getDocumentById(decodedDocId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Document with ID ${decodedDocId} not found` 
+      });
+    }
+    
+    // Get all validated questions for this document
+    const questionRecords = getValidatedQuestionsByDocId(decodedDocId);
+    
+    // Si aucune question validée, retourner un message d'erreur mais avec un code 200
+    // pour que le frontend puisse afficher le message approprié
+    if (questionRecords.length === 0) {
+      return res.status(200).json({ 
+        success: false, 
+        error: `Vous n'avez validé aucune question. Veuillez valider au moins une question avant d'exporter.` 
+      });
+    }
+    
+    const questions = questionRecords.map(q => JSON.parse(q.content));
+    
+    // Generate Aiken format
+    const aikenContent = exportAiken(questions);
+    
+    // Create a clean filename based on the document name
+    const cleanFilename = document.filename
+      .replace(/\.[^/.]+$/, '') // Remove extension
+      .replace(/[^a-zA-Z0-9_-]/g, '_') // Replace special chars with underscore
+      .substring(0, 50); // Limit length
+    
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename=${cleanFilename}_aiken.txt`);
+    
+    // Send the Aiken content
+    res.send(aikenContent);
+  } catch (error) {
+    console.error('Error exporting to Aiken:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to export questions in Aiken format' 
+    });
+  }
+});
+
+// DELETE /api/documents/:docId - Delete a document
+router.delete('/documents/:docId', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    
+    // Get the document to check if it exists
+    const document = getDocumentById(docId);
+    if (!document) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Document with ID ${docId} not found` 
+      });
+    }
+    
+    // Delete the document and its associated questions from the database
+    db.prepare('DELETE FROM questions WHERE docId = ?').run(docId);
+    db.prepare('DELETE FROM documents WHERE id = ?').run(docId);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { success: true } 
+    });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to delete document: ${(error as Error).message}` 
+    });
+  }
+});
+
+// DELETE /api/referentiels/:refId - Delete a referentiel
+router.delete('/referentiels/:refId', async (req, res) => {
+  try {
+    const { refId } = req.params;
+    
+    // Get the referentiel to check if it exists
+    const referentiel = getReferentielById(refId);
+    if (!referentiel) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Referentiel with ID ${refId} not found` 
+      });
+    }
+    
+    // Delete the referentiel from the database
+    db.prepare('DELETE FROM referentiels WHERE id = ?').run(refId);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { success: true } 
+    });
+  } catch (error) {
+    console.error('Error deleting referentiel:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to delete referentiel: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/documents/:docId/content - Get document content
+router.get('/documents/:docId/content', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    
+    // Décodage de l'ID pour gérer les caractères spéciaux
+    const decodedDocId = decodeURIComponent(docId);
+    
+    console.log(`Trying to get document with ID: ${decodedDocId}`);
+    
+    // Get the document
+    const document = getDocumentById(decodedDocId);
+    if (!document) {
+      console.error(`Document with ID ${decodedDocId} not found`);
+      
+      // Récupérer tous les documents pour le débogage
+      const allDocuments = getAllDocuments();
+      console.log(`Available documents: ${allDocuments.map(doc => doc.id).join(', ')}`);
+      
+      return res.status(404).json({ 
+        success: false, 
+        error: `Document with ID ${decodedDocId} not found` 
+      });
+    }
+    
+    console.log(`Found document: ${document.filename}, content length: ${document.content ? document.content.length : 0}`);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { content: document.content || 'Contenu non disponible' } 
+    });
+  } catch (error) {
+    console.error('Error getting document content:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to get document content: ${(error as Error).message}` 
+    });
+  }
+});
+
+// GET /api/referentiels/:refId/content - Get referentiel content
+router.get('/referentiels/:refId/content', async (req, res) => {
+  try {
+    const { refId } = req.params;
+    
+    // Décodage de l'ID pour gérer les caractères spéciaux
+    const decodedRefId = decodeURIComponent(refId);
+    
+    console.log(`Trying to get referentiel with ID: ${decodedRefId}`);
+    
+    // Get the referentiel
+    const referentiel = getReferentielById(decodedRefId);
+    if (!referentiel) {
+      console.error(`Referentiel with ID ${decodedRefId} not found`);
+      
+      // Récupérer tous les référentiels pour le débogage
+      const allReferentiels = getAllReferentiels();
+      console.log(`Available referentiels: ${allReferentiels.map(ref => ref.id).join(', ')}`);
+      
+      return res.status(404).json({ 
+        success: false, 
+        error: `Referentiel with ID ${decodedRefId} not found` 
+      });
+    }
+    
+    console.log(`Found referentiel: ${referentiel.filename}, content length: ${referentiel.content ? referentiel.content.length : 0}`);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { content: referentiel.content || 'Contenu non disponible' } 
+    });
+  } catch (error) {
+    console.error('Error getting referentiel content:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Failed to get referentiel content: ${(error as Error).message}` 
     });
   }
 });

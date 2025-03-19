@@ -131,33 +131,145 @@ function getDifficultyDescription(difficulty: Difficulty): string {
  * Generate fallback questions for testing purposes
  */
 function generateFallbackQuestions(
-  docId: string,
+  questionType: QuestionType,
+  testMode: TestMode,
+  difficulty: Difficulty,
+  docId: string
+): Question[] {
+  console.log('Using fallback questions for testing');
+  
+  // Create a set of fallback questions that are more realistic
+  const questions: Question[] = [];
+  
+  // Thèmes éducatifs pour des questions plus réalistes
+  const themes = [
+    "Les principes de l'apprentissage actif",
+    "L'évaluation formative en éducation",
+    "Les méthodes pédagogiques innovantes",
+    "La différenciation pédagogique",
+    "L'utilisation des technologies en classe"
+  ];
+  
+  for (let i = 0; i < themes.length; i++) {
+    const questionId = uuidv4();
+    const answers: Answer[] = [];
+    
+    // Générer des réponses plus réalistes selon le thème
+    if (questionType === 'qcm_simple') {
+      // Pour les QCM simples
+      const answerOptions = getAnswerOptionsForTheme(themes[i]);
+      
+      // Générer 4 réponses, en rendant l'une d'elles correcte
+      for (let j = 0; j < answerOptions.length; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: answerOptions[j],
+          isCorrect: j === 0 // La première réponse est correcte
+        });
+      }
+    } else if (questionType === 'qcm_multiple') {
+      // Pour les QCM à réponses multiples
+      const answerOptions = getAnswerOptionsForTheme(themes[i]);
+      
+      // Générer 4 réponses, avec plusieurs réponses correctes
+      for (let j = 0; j < answerOptions.length; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: answerOptions[j],
+          isCorrect: j === 0 || j === 2 // La première et la troisième réponses sont correctes
+        });
+      }
+    } else {
+      // Pour les autres types de questions
+      for (let j = 1; j <= 4; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: `Option ${j} pour "${themes[i]}"`,
+          isCorrect: j === 1 // La première réponse est correcte
+        });
+      }
+    }
+    
+    // Créer une question plus réaliste basée sur le thème
+    questions.push({
+      id: questionId,
+      text: generateQuestionTextForTheme(themes[i], difficulty),
+      questionType,
+      testMode,
+      difficulty,
+      answers,
+      validated: false,
+      docId,
+      createdAt: new Date().toISOString()
+    });
+  }
+  
+  return questions;
+}
+
+function generateFallbackQuestionsWithoutDocId(
   questionType: QuestionType,
   testMode: TestMode,
   difficulty: Difficulty
 ): Question[] {
   console.log('Using fallback questions for testing');
   
-  // Create a set of fallback questions for testing
+  // Create a set of fallback questions that are more realistic
   const questions: Question[] = [];
   
-  for (let i = 1; i <= 5; i++) {
+  // Thèmes éducatifs pour des questions plus réalistes
+  const themes = [
+    "Les principes de l'apprentissage actif",
+    "L'évaluation formative en éducation",
+    "Les méthodes pédagogiques innovantes",
+    "La différenciation pédagogique",
+    "L'utilisation des technologies en classe"
+  ];
+  
+  for (let i = 0; i < themes.length; i++) {
     const questionId = uuidv4();
     const answers: Answer[] = [];
     
-    // Generate 4 answers, making the first one correct
-    for (let j = 1; j <= 4; j++) {
-      answers.push({
-        id: uuidv4(),
-        text: `Réponse ${j} pour la question ${i}`,
-        isCorrect: j === 1 // First answer is correct
-      });
+    // Générer des réponses plus réalistes selon le thème
+    if (questionType === 'qcm_simple') {
+      // Pour les QCM simples
+      const answerOptions = getAnswerOptionsForTheme(themes[i]);
+      
+      // Générer 4 réponses, en rendant l'une d'elles correcte
+      for (let j = 0; j < answerOptions.length; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: answerOptions[j],
+          isCorrect: j === 0 // La première réponse est correcte
+        });
+      }
+    } else if (questionType === 'qcm_multiple') {
+      // Pour les QCM à réponses multiples
+      const answerOptions = getAnswerOptionsForTheme(themes[i]);
+      
+      // Générer 4 réponses, avec plusieurs réponses correctes
+      for (let j = 0; j < answerOptions.length; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: answerOptions[j],
+          isCorrect: j === 0 || j === 2 // La première et la troisième réponses sont correctes
+        });
+      }
+    } else {
+      // Pour les autres types de questions
+      for (let j = 1; j <= 4; j++) {
+        answers.push({
+          id: uuidv4(),
+          text: `Option ${j} pour "${themes[i]}"`,
+          isCorrect: j === 1 // La première réponse est correcte
+        });
+      }
     }
     
+    // Créer une question plus réaliste basée sur le thème
     questions.push({
       id: questionId,
-      docId,
-      text: `Question de test ${i} pour le document ${docId}`,
+      text: generateQuestionTextForTheme(themes[i], difficulty),
       questionType,
       testMode,
       difficulty,
@@ -171,14 +283,80 @@ function generateFallbackQuestions(
 }
 
 /**
+ * Génère un texte de question réaliste basé sur un thème et une difficulté
+ */
+function generateQuestionTextForTheme(theme: string, difficulty: Difficulty): string {
+  switch (difficulty) {
+    case 'debutant':
+      return `Quelle est la principale caractéristique de ${theme} ?`;
+    case 'intermediaire':
+      return `Quels sont les éléments clés à considérer lors de la mise en œuvre de ${theme} ?`;
+    case 'avance':
+      return `Analysez les implications théoriques et pratiques de ${theme} dans un contexte éducatif moderne.`;
+    default:
+      return `Expliquez le concept de ${theme}.`;
+  }
+}
+
+/**
+ * Retourne des options de réponse réalistes pour un thème donné
+ */
+function getAnswerOptionsForTheme(theme: string): string[] {
+  switch (theme) {
+    case "Les principes de l'apprentissage actif":
+      return [
+        "L'engagement direct des apprenants dans le processus d'apprentissage",
+        "La mémorisation passive des informations présentées",
+        "L'utilisation exclusive de méthodes traditionnelles",
+        "La limitation des interactions entre apprenants"
+      ];
+    case "L'évaluation formative en éducation":
+      return [
+        "Un processus continu qui guide l'enseignement et l'apprentissage",
+        "Une évaluation uniquement en fin de parcours d'apprentissage",
+        "Un système de notation standardisé",
+        "Une méthode qui évite tout feedback aux apprenants"
+      ];
+    case "Les méthodes pédagogiques innovantes":
+      return [
+        "L'apprentissage par projet et la classe inversée",
+        "Les cours magistraux traditionnels",
+        "L'utilisation exclusive de manuels scolaires",
+        "L'évitement de toute technologie en classe"
+      ];
+    case "La différenciation pédagogique":
+      return [
+        "L'adaptation de l'enseignement aux besoins individuels des apprenants",
+        "L'application d'une méthode unique pour tous les apprenants",
+        "La séparation permanente des apprenants par niveau",
+        "L'utilisation exclusive de travaux individuels"
+      ];
+    case "L'utilisation des technologies en classe":
+      return [
+        "L'intégration d'outils numériques pour enrichir l'apprentissage",
+        "Le remplacement complet de l'enseignant par la technologie",
+        "L'interdiction de tout appareil électronique en classe",
+        "L'utilisation de technologies obsolètes uniquement"
+      ];
+    default:
+      return [
+        "Réponse correcte pour ce thème",
+        "Réponse incorrecte mais plausible",
+        "Autre réponse incorrecte",
+        "Réponse clairement incorrecte"
+      ];
+  }
+}
+
+/**
  * Call the Azure OpenAI API to generate questions
  */
 export async function generateQuestions(
-  docId: string,
   documentContent: string,
   questionType: QuestionType,
   testMode: TestMode,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  docId?: string
 ): Promise<Question[]> {
   try {
     // Check if we're in development mode and should use fallback questions
@@ -189,7 +367,12 @@ export async function generateQuestions(
     
     if (process.env.NODE_ENV === 'development' && process.env.USE_FALLBACK_QUESTIONS === 'true') {
       console.log('Using fallback questions due to environment configuration');
-      return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+      // Si docId est fourni, l'utiliser pour les questions de secours
+      if (docId) {
+        return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+      } else {
+        return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+      }
     }
     
     if (!AZURE_OPENAI_KEY || !AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_DEPLOYMENT_NAME) {
@@ -200,7 +383,7 @@ export async function generateQuestions(
       throw new Error('Azure OpenAI configuration is not complete');
     }
 
-    console.log(`Generating questions for document ${docId} with type ${questionType}, mode ${testMode}, difficulty ${difficulty}`);
+    console.log(`Generating questions with type ${questionType}, mode ${testMode}, difficulty ${difficulty}`);
     console.log('Using Azure OpenAI API with the following configuration:');
     console.log('AZURE_OPENAI_ENDPOINT:', AZURE_OPENAI_ENDPOINT);
     console.log('AZURE_OPENAI_DEPLOYMENT_NAME:', AZURE_OPENAI_DEPLOYMENT_NAME);
@@ -254,7 +437,11 @@ export async function generateQuestions(
         if (!response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
           console.error('Unexpected Azure OpenAI API response structure:', JSON.stringify(response.data, null, 2));
           // Use fallback questions instead of throwing an error
-          return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+          if (docId) {
+            return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+          } else {
+            return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+          }
         }
         
         const assistantMessage = response.data.choices[0].message.content;
@@ -265,7 +452,11 @@ export async function generateQuestions(
         if (!jsonMatch) {
           console.error('Failed to extract valid JSON from Azure OpenAI response');
           // Use fallback questions instead of throwing an error
-          return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+          if (docId) {
+            return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+          } else {
+            return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+          }
         }
         
         const jsonString = jsonMatch[0];
@@ -277,7 +468,11 @@ export async function generateQuestions(
         } catch (parseError) {
           console.error('Error parsing JSON:', parseError);
           // Use fallback questions instead of throwing an error
-          return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+          if (docId) {
+            return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+          } else {
+            return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+          }
         }
         
         console.log('Parsed questions:', rawQuestions);
@@ -285,7 +480,6 @@ export async function generateQuestions(
         // Format the questions according to our model
         const questions: Question[] = rawQuestions.map((q: any) => ({
           id: uuidv4(),
-          docId,
           text: q.text,
           questionType,
           testMode,
@@ -296,6 +490,7 @@ export async function generateQuestions(
             isCorrect: Boolean(a.isCorrect) // Ensure isCorrect is a boolean
           })),
           validated: false,
+          docId,
           createdAt: new Date().toISOString()
         }));
 
@@ -334,10 +529,18 @@ export async function generateQuestions(
 
     // If we've exhausted all retries or encountered a non-retryable error
     console.error('Failed to generate questions after multiple attempts, using fallback questions');
-    return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+    if (docId) {
+      return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+    } else {
+      return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+    }
   } catch (error) {
     console.error('Error generating questions:', error);
     // Use fallback questions instead of throwing an error
-    return generateFallbackQuestions(docId, questionType, testMode, difficulty);
+    if (docId) {
+      return generateFallbackQuestions(questionType, testMode, difficulty, docId);
+    } else {
+      return generateFallbackQuestionsWithoutDocId(questionType, testMode, difficulty);
+    }
   }
 }
