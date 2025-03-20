@@ -1,84 +1,87 @@
 # QuizForge
 
-A POC application for generating quizzes from documents using Azure OpenAI API.
+Application pour générer des quiz à partir de documents pédagogiques en utilisant l'API Azure OpenAI.
 
-## Features
+## Fonctionnalités
 
-- Upload documents (PDF, DOCX, SCORM)
-- Extract text from uploaded documents
-- Generate questions using Azure OpenAI API
-- Configure question types, difficulty levels, and test modes
-- Edit and validate generated questions
-- Export questions in GIFT or Moodle XML format
+- Import de documents pédagogiques (PDF, DOCX)
+- Import de référentiels pédagogiques pour guider la génération de questions
+- Extraction de texte à partir des documents importés
+- Génération de questions en utilisant l'API Azure OpenAI
+- Configuration des types de questions, niveaux de difficulté et modes de test
+- Édition et validation des questions générées
+- Export des questions dans plusieurs formats :
+  - GIFT (compatible Moodle)
+  - Moodle XML (avec noms de questions préfixés "QuizForge Question")
+  - Aiken
+  - PDF (format adapté pour les élèves avec cases à cocher)
 
-## Tech Stack
+## Stack Technique
 
-- **Frontend**: React + TypeScript, using Vite
+- **Frontend**: React + TypeScript, utilisant Vite
 - **Backend**: Node.js (Express) + TypeScript
-- **Database**: SQLite
-- **Testing**: Jest (backend), React Testing Library (frontend)
+- **Base de données**: SQLite
+- **API IA**: Azure OpenAI (GPT-4o)
+- **Parsing de documents**: pdf-parse, mammoth
 
-## Getting Started
+## Démarrage Rapide
 
-### Prerequisites
+### Prérequis
 
-- Node.js (v14 or higher)
-- npm (v6 or higher)
+- Node.js (v14 ou supérieur)
+- npm (v6 ou supérieur)
 
 ### Installation
 
-1. Clone the repository
-2. Install dependencies:
+1. Cloner le dépôt
+2. Installer les dépendances:
 
 ```bash
 npm run install:all
 ```
 
-3. Create a `.env` file in the `backend` directory with your API keys:
+3. Créer un fichier `.env` dans le répertoire `backend` avec vos clés API:
 
 ```
-# Azure OpenAI Configuration
+# Configuration Azure OpenAI
 AZURE_OPENAI_KEY=your_azure_openai_key_here
 AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name_here
-
-# Optional: Claude API Configuration (Legacy)
-# CLAUDE_API_KEY=your_claude_api_key_here
 ```
 
-### Azure OpenAI Configuration
+### Configuration Azure OpenAI
 
-The application is configured to use Azure OpenAI API with the following default settings:
-- API Key: 10073d56dbaf4362a3cec8c914e0b791
+L'application est configurée pour utiliser l'API Azure OpenAI avec les paramètres par défaut suivants:
+- Clé API: 10073d56dbaf4362a3cec8c914e0b791
 - Endpoint: https://flowise-azure-openai.openai.azure.com
-- Deployment Name: azure-gpt4o
+- Nom du déploiement: azure-gpt4o
 
-### Running the Application
+### Lancement de l'Application
 
-To start both the frontend and backend in development mode:
+Pour démarrer à la fois le frontend et le backend en mode développement:
 
 ```bash
 npm run dev
 ```
 
-The frontend will be available at http://localhost:5173 and the backend at http://localhost:3000.
+Le frontend sera disponible à l'adresse http://localhost:5173 et le backend à l'adresse http://localhost:3000.
 
-### Testing
+## Utilisation
 
-To run all tests:
+1. **Import d'un Document**: Commencez par importer un document PDF ou DOCX.
+2. **Import d'un Référentiel** (optionnel): Importez un référentiel pédagogique pour guider la génération des questions.
+3. **Configuration de la Génération**: Sélectionnez le type de question, le mode de test et le niveau de difficulté.
+4. **Génération des Questions**: Utilisez Azure OpenAI pour générer des questions basées sur le contenu du document.
+5. **Édition des Questions**: Révisez et modifiez les questions générées selon vos besoins.
+6. **Export des Questions**: Exportez les questions dans le format de votre choix (GIFT, Moodle XML, Aiken, PDF).
 
-```bash
-npm test
-```
+## Formats d'Export
 
-## Usage
+- **GIFT**: Format texte compatible avec Moodle
+- **Moodle XML**: Format XML avec noms de questions préfixés "QuizForge Question" pour une identification facile
+- **Aiken**: Format texte simple pour les QCM
+- **PDF**: Format adapté pour les élèves avec cases à cocher et sans indication des réponses correctes
 
-1. **Upload a Document**: Start by uploading a PDF, DOCX, or SCORM file.
-2. **Configure Question Generation**: Select the question type, test mode, and difficulty level.
-3. **Generate Questions**: Use Azure OpenAI to generate questions based on the document content.
-4. **Edit Questions**: Review and edit the generated questions as needed.
-5. **Export Questions**: Export the questions in GIFT or Moodle XML format.
-
-## License
+## Licence
 
 ISC
