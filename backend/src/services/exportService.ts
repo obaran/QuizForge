@@ -1,4 +1,6 @@
 import { Question, Answer } from '../models/types';
+import PDFDocument from 'pdfkit';
+import { Readable } from 'stream';
 
 /**
  * Export questions in GIFT format
@@ -97,7 +99,8 @@ export function exportMoodleXml(questions: Question[]): string {
   let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
   xmlContent += '<quiz>\n';
 
-  for (const question of questions) {
+  for (let i = 0; i < questions.length; i++) {
+    const question = questions[i];
     xmlContent += '  <question type="';
     
     // Determine question type
@@ -117,8 +120,8 @@ export function exportMoodleXml(questions: Question[]): string {
     
     xmlContent += '">\n';
     
-    // Add question metadata
-    xmlContent += `    <name><text>Question ${question.id}</text></name>\n`;
+    // Add question metadata with a more recognizable name
+    xmlContent += `    <name><text>QuizForge Question ${i + 1}</text></name>\n`;
     xmlContent += `    <questiontext format="html"><text><![CDATA[${question.text}]]></text></questiontext>\n`;
     xmlContent += '    <generalfeedback format="html"><text></text></generalfeedback>\n';
     xmlContent += '    <defaultgrade>1.0</defaultgrade>\n';
@@ -170,11 +173,11 @@ export function exportMoodleXml(questions: Question[]): string {
       xmlContent += '    <shuffleanswers>true</shuffleanswers>\n';
       
       // Add subquestions (assuming pairs of items to match)
-      for (let i = 0; i < question.answers.length; i += 2) {
-        if (i + 1 < question.answers.length) {
+      for (let j = 0; j < question.answers.length; j += 2) {
+        if (j + 1 < question.answers.length) {
           xmlContent += '    <subquestion format="html">\n';
-          xmlContent += `      <text><![CDATA[${question.answers[i].text}]]></text>\n`;
-          xmlContent += `      <answer><text><![CDATA[${question.answers[i + 1].text}]]></text></answer>\n`;
+          xmlContent += `      <text><![CDATA[${question.answers[j].text}]]></text>\n`;
+          xmlContent += `      <answer><text><![CDATA[${question.answers[j + 1].text}]]></text></answer>\n`;
           xmlContent += '    </subquestion>\n';
         }
       }
@@ -185,4 +188,129 @@ export function exportMoodleXml(questions: Question[]): string {
 
   xmlContent += '</quiz>';
   return xmlContent;
+}
+
+/**
+ * Export questions in Aiken format
+ * @param questions Array of questions to export
+ * @returns String in Aiken format
+ */
+export function exportAiken(questions: Question[]): string {
+  let aikenContent = '';
+
+  for (const question of questions) {
+    // Only QCM simple is supported in Aiken format
+    if (question.questionType !== 'qcm_simple') {
+      continue;
+    }
+    
+    // Add question text
+    aikenContent += `${question.text}\n`;
+    
+    // Add answers
+    const answerOptions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    let correctAnswer = '';
+    
+    question.answers.forEach((answer, index) => {
+      if (index < answerOptions.length) {
+        aikenContent += `${answerOptions[index]}. ${answer.text}\n`;
+        
+        if (answer.isCorrect) {
+          correctAnswer = answerOptions[index];
+        }
+      }
+    });
+    
+    // Add correct answer indicator
+    aikenContent += `ANSWER: ${correctAnswer}\n\n`;
+  }
+  
+  return aikenContent;
+}
+
+/**
+ * Export questions in PDF format
+ * @param questions Array of questions to export
+ * @returns Buffer containing PDF data
+ */
+export async function exportPdf(questions: Question[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Create a PDF document
+      const doc = new PDFDocument({
+        margin: 50,
+        size: 'A4'
+      });
+      
+      // Collect PDF data chunks
+      const chunks: Buffer[] = [];
+      const stream = new Readable();
+      
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      
+      // Add title
+      doc.fontSize(18).text('Questions exportées', { align: 'center' });
+      doc.moveDown();
+      
+      // Add each question
+      questions.forEach((question, index) => {
+        // Add question number and text
+        doc.fontSize(14).text(`Question ${index + 1}`, { underline: true });
+        doc.fontSize(12).text(question.text);
+        doc.moveDown(0.5);
+        
+        // Add question metadata
+        doc.fontSize(10)
+          .text(`Type: ${getQuestionTypeLabel(question.questionType)} | ` +
+                `Difficulté: ${getDifficultyLabel(question.difficulty)} | ` +
+                `Mode de test: ${getTestModeLabel(question.testMode)}`);
+        doc.moveDown(0.5);
+        
+        // Add answers
+        doc.fontSize(12).text('Réponses:');
+        
+        question.answers.forEach((answer, ansIndex) => {
+          const prefix = answer.isCorrect ? '✓' : '○';
+          doc.text(`${prefix} ${answer.text}`);
+        });
+        
+        // Add space between questions
+        doc.moveDown();
+      });
+      
+      // Finalize the PDF
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// Helper functions for PDF export
+function getQuestionTypeLabel(type: string): string {
+  switch (type) {
+    case 'qcm_simple': return 'QCM (une seule réponse)';
+    case 'qcm_multiple': return 'QCM (plusieurs réponses)';
+    case 'association': return 'Association';
+    default: return type;
+  }
+}
+
+function getDifficultyLabel(difficulty: string): string {
+  switch (difficulty) {
+    case 'debutant': return 'Débutant';
+    case 'intermediaire': return 'Intermédiaire';
+    case 'avance': return 'Avancé';
+    default: return difficulty;
+  }
+}
+
+function getTestModeLabel(mode: string): string {
+  switch (mode) {
+    case 'admission': return 'Admission';
+    case 'niveau': return 'Niveau';
+    case 'final': return 'Final';
+    default: return mode;
+  }
 }
