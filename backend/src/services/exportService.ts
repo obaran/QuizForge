@@ -250,7 +250,7 @@ export async function exportPdf(questions: Question[]): Promise<Buffer> {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       
       // Add title
-      doc.fontSize(18).text('Questions exportées', { align: 'center' });
+      doc.fontSize(18).text('Quiz à compléter', { align: 'center' });
       doc.moveDown();
       
       // Add each question
@@ -263,16 +263,25 @@ export async function exportPdf(questions: Question[]): Promise<Buffer> {
         // Add question metadata
         doc.fontSize(10)
           .text(`Type: ${getQuestionTypeLabel(question.questionType)} | ` +
-                `Difficulté: ${getDifficultyLabel(question.difficulty)} | ` +
-                `Mode de test: ${getTestModeLabel(question.testMode)}`);
+                `Difficulté: ${getDifficultyLabel(question.difficulty)}`);
         doc.moveDown(0.5);
         
-        // Add answers
+        // Add answers with checkboxes for students to fill in
         doc.fontSize(12).text('Réponses:');
         
         question.answers.forEach((answer, ansIndex) => {
-          const prefix = answer.isCorrect ? '✓' : '○';
-          doc.text(`${prefix} ${answer.text}`);
+          // Nettoyer le texte de la réponse pour éliminer tous les caractères spéciaux indésirables
+          // Utiliser une approche plus agressive pour éliminer tous les caractères non standards
+          let cleanText = answer.text;
+          
+          // Supprimer les préfixes spécifiques qui causent des problèmes
+          cleanText = cleanText.replace(/^[%'Ë○✓\s]+/g, ''); // Supprimer les préfixes problématiques
+          cleanText = cleanText.replace(/[%'Ë○✓¡]/g, '');    // Supprimer les caractères spéciaux partout
+          cleanText = cleanText.trim();
+          
+          // Utiliser des lettres pour les options (A, B, C, D) suivies d'une case à cocher vide
+          const optionLetter = String.fromCharCode(65 + ansIndex); // A, B, C, D...
+          doc.text(`${optionLetter}. □ ${cleanText}`);
         });
         
         // Add space between questions
