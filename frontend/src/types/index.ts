@@ -6,6 +6,14 @@ export interface Document {
   createdAt: string;
 }
 
+// Referentiel types
+export interface Referentiel {
+  id: string;
+  filename: string;
+  content: string;
+  createdAt: string;
+}
+
 // Question types
 export type QuestionType = 'qcm_simple' | 'qcm_multiple' | 'association';
 export type TestMode = 'admission' | 'niveau' | 'final';
@@ -35,6 +43,13 @@ export interface GenerateQuestionsRequest {
   questionType: QuestionType;
   testMode: TestMode;
   difficulty: Difficulty;
+  numberOfQuestions?: number;
+  refId?: string; // ID du référentiel à utiliser comme guide (optionnel)
+}
+
+export interface SaveValidatedQuestionsRequest {
+  docId: string;
+  questions: Question[];
 }
 
 export interface UpdateQuestionRequest {
@@ -53,6 +68,13 @@ export interface ApiResponse<T> {
 export interface UploadResponse {
   docId: string;
   filename: string;
+  createdAt: string;
+}
+
+export interface ReferentielResponse {
+  refId: string;
+  filename: string;
+  createdAt: string;
 }
 
 export interface GenerateQuestionsResponse {
@@ -60,4 +82,4 @@ export interface GenerateQuestionsResponse {
 }
 
 // Export formats
-export type ExportFormat = 'gift' | 'xml';
+export type ExportFormat = 'gift' | 'moodlexml' | 'aiken' | 'pdf';

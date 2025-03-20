@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import quizRoutes from './routes/quizRoutes';
-import { initializeDatabase } from './utils/db';
+import { initializeDatabase, db } from './utils/db';
 
 // Load environment variables from .env file in the backend directory
 // This needs to be at the very top before any other code executes
@@ -35,6 +35,15 @@ console.log('AZURE_OPENAI_KEY is set:', !!process.env.AZURE_OPENAI_KEY);
 
 // Initialize the database
 initializeDatabase();
+
+// Clear all questions from the database at startup
+console.log('Clearing all questions from the database...');
+try {
+  db.prepare('DELETE FROM questions').run();
+  console.log('All questions have been cleared from the database');
+} catch (error) {
+  console.error('Error clearing questions:', error);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -10,6 +10,9 @@ const GeneratePage = () => {
   const [questionType, setQuestionType] = useState<QuestionType>('qcm_simple');
   const [testMode, setTestMode] = useState<TestMode>('niveau');
   const [difficulty, setDifficulty] = useState<Difficulty>('intermediaire');
+  const [numberOfQuestions, setNumberOfQuestions] = useState<number>(5);
+  const [customNumberInput, setCustomNumberInput] = useState<string>('');
+  const [useCustomNumber, setUseCustomNumber] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +28,14 @@ const GeneratePage = () => {
       return;
     }
 
+    // Vérifier que le nombre de questions est valide
+    const questionsToGenerate = useCustomNumber ? parseInt(customNumberInput, 10) : numberOfQuestions;
+    
+    if (isNaN(questionsToGenerate) || questionsToGenerate < 1 || questionsToGenerate > 50) {
+      setError('Le nombre de questions doit être entre 1 et 50');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
 
@@ -33,12 +44,18 @@ const GeneratePage = () => {
         docId,
         questionType,
         testMode,
-        difficulty
+        difficulty,
+        numberOfQuestions: questionsToGenerate
       });
 
       if (!response.success || !response.data) {
         throw new Error(response.error || 'Échec de la génération des questions');
       }
+
+      // Stocker les questions générées dans sessionStorage
+      const tempQuestionsKey = `tempQuestions_${docId}`;
+      sessionStorage.setItem(tempQuestionsKey, JSON.stringify(response.data.questions));
+      console.log(`${response.data.questions.length} questions stockées dans sessionStorage`);
 
       // Navigate to edit questions page
       navigate(`/edit/${docId}`);
@@ -47,6 +64,22 @@ const GeneratePage = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Gérer le changement du nombre de questions prédéfini
+  const handleNumberOfQuestionsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === 'custom') {
+      setUseCustomNumber(true);
+    } else {
+      setUseCustomNumber(false);
+      setNumberOfQuestions(parseInt(value, 10));
+    }
+  };
+
+  // Gérer le changement du nombre personnalisé
+  const handleCustomNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomNumberInput(e.target.value);
   };
 
   return (
@@ -98,6 +131,43 @@ const GeneratePage = () => {
             <option value="avance">Avancé</option>
           </select>
         </div>
+
+        <div className="form-group">
+          <label htmlFor="number-of-questions">Nombre de questions</label>
+          <select
+            id="number-of-questions"
+            value={useCustomNumber ? 'custom' : numberOfQuestions.toString()}
+            onChange={handleNumberOfQuestionsChange}
+            disabled={isGenerating}
+          >
+            <option value="5">5 questions</option>
+            <option value="10">10 questions</option>
+            <option value="15">15 questions</option>
+            <option value="20">20 questions</option>
+            <option value="25">25 questions</option>
+            <option value="30">30 questions</option>
+            <option value="40">40 questions</option>
+            <option value="50">50 questions</option>
+            <option value="custom">Personnalisé...</option>
+          </select>
+        </div>
+
+        {useCustomNumber && (
+          <div className="form-group">
+            <label htmlFor="custom-number">Nombre personnalisé (1-50)</label>
+            <input
+              id="custom-number"
+              type="number"
+              min="1"
+              max="50"
+              value={customNumberInput}
+              onChange={handleCustomNumberChange}
+              placeholder="Entrez un nombre entre 1 et 50"
+              disabled={isGenerating}
+              className="custom-number-input"
+            />
+          </div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
 

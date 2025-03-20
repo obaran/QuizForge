@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getQuestionsByDocId, exportQuestions } from '../services/api';
-import { ExportFormat } from '../types';
+import { exportTempQuestions } from '../services/api';
+import { ExportFormat, Question } from '../types';
 
 const ExportPage = () => {
   const { docId } = useParams<{ docId: string }>();
   const navigate = useNavigate();
   
-  const [validatedCount, setValidatedCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const [validatedQuestions, setValidatedQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportInProgress, setExportInProgress] = useState(false);
 
   useEffect(() => {
     if (!docId) {
@@ -18,34 +18,91 @@ const ExportPage = () => {
       return;
     }
 
-    const fetchQuestions = async () => {
-      setLoading(true);
+    // Récupérer les questions validées depuis sessionStorage
+    const storedQuestions = sessionStorage.getItem(`validatedQuestions_${docId}`);
+    
+    if (storedQuestions) {
       try {
-        const response = await getQuestionsByDocId(docId);
-        
-        if (!response.success || !response.data) {
-          throw new Error(response.error || 'Échec de la récupération des questions');
-        }
-        
-        const total = response.data.questions.length;
-        const validated = response.data.questions.filter(q => q.validated).length;
-        
-        setTotalCount(total);
-        setValidatedCount(validated);
+        const parsedQuestions = JSON.parse(storedQuestions);
+        setValidatedQuestions(parsedQuestions);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Une erreur est survenue');
-      } finally {
-        setLoading(false);
+        setError('Erreur lors du chargement des questions temporaires');
       }
-    };
-
-    fetchQuestions();
+    } else {
+      // Récupérer toutes les questions temporaires et filtrer les validées
+      const tempQuestions = sessionStorage.getItem(`tempQuestions_${docId}`);
+      
+      if (tempQuestions) {
+        try {
+          const parsedQuestions = JSON.parse(tempQuestions);
+          const validated = parsedQuestions.filter((q: Question) => q.validated);
+          setValidatedQuestions(validated);
+        } catch (err) {
+          setError('Erreur lors du chargement des questions temporaires');
+        }
+      } else {
+        setError('Aucune question disponible pour ce document');
+      }
+    }
+    
+    setLoading(false);
   }, [docId, navigate]);
 
-  const handleExport = (format: ExportFormat) => {
-    // Create a link to download the file
-    const exportUrl = exportQuestions(format);
-    window.open(exportUrl, '_blank');
+  const handleExport = async (format: ExportFormat) => {
+    if (!docId) return;
+    
+    if (validatedQuestions.length === 0) {
+      setError('Vous n\'avez validé aucune question. Veuillez valider au moins une question avant d\'exporter.');
+      return;
+    }
+    
+    setExportInProgress(true);
+    setError(null);
+    
+    try {
+      // Appeler l'API pour exporter les questions temporaires
+      const blob = await exportTempQuestions(format, docId, validatedQuestions);
+      
+      // Créer un URL pour le blob
+      const url = window.URL.createObjectURL(blob);
+      
+      // Créer un lien pour télécharger le fichier
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      
+      // Déterminer le nom du fichier en fonction du format
+      let extension = '';
+      switch (format) {
+        case 'gift':
+          extension = 'txt';
+          break;
+        case 'moodlexml':
+          extension = 'xml';
+          break;
+        case 'aiken':
+          extension = 'txt';
+          break;
+        case 'pdf':
+          extension = 'pdf';
+          break;
+        default:
+          extension = 'txt';
+      }
+      
+      a.download = `questions_export.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Nettoyer
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setError('Erreur lors de l\'exportation des questions');
+      console.error('Export error:', err);
+    } finally {
+      setExportInProgress(false);
+    }
   };
 
   if (loading) {
@@ -57,7 +114,7 @@ const ExportPage = () => {
       <div className="error-container">
         <h2>Erreur</h2>
         <p>{error}</p>
-        <button onClick={() => navigate('/')}>Retour à l'accueil</button>
+        <button onClick={() => navigate(`/edit/${docId}`)}>Retour à l'édition</button>
       </div>
     );
   }
@@ -68,10 +125,10 @@ const ExportPage = () => {
       
       <div className="export-info">
         <p>
-          Vous avez validé <strong>{validatedCount}</strong> questions sur un total de <strong>{totalCount}</strong>.
+          Vous avez <strong>{validatedQuestions.length}</strong> questions validées prêtes à être exportées.
         </p>
         
-        {validatedCount === 0 ? (
+        {validatedQuestions.length === 0 ? (
           <div className="warning-message">
             <p>Vous n'avez validé aucune question. Veuillez valider au moins une question avant d'exporter.</p>
             <button 
@@ -91,19 +148,45 @@ const ExportPage = () => {
               <button 
                 onClick={() => handleExport('gift')}
                 className="export-button"
+                disabled={exportInProgress}
               >
-                Exporter en GIFT
+                {exportInProgress ? 'Exportation en cours...' : 'Exporter en GIFT'}
               </button>
             </div>
             
             <div className="export-format-card">
-              <h3>Format XML Moodle</h3>
+              <h3>Format Moodle XML</h3>
               <p>Format XML standard pour l'importation dans Moodle.</p>
               <button 
-                onClick={() => handleExport('xml')}
+                onClick={() => handleExport('moodlexml')}
                 className="export-button"
+                disabled={exportInProgress}
               >
-                Exporter en XML
+                {exportInProgress ? 'Exportation en cours...' : 'Exporter en Moodle XML'}
+              </button>
+            </div>
+            
+            <div className="export-format-card">
+              <h3>Format Aiken</h3>
+              <p>Format texte simple pour les QCM, compatible avec Moodle.</p>
+              <button 
+                onClick={() => handleExport('aiken')}
+                className="export-button"
+                disabled={exportInProgress}
+              >
+                {exportInProgress ? 'Exportation en cours...' : 'Exporter en Aiken'}
+              </button>
+            </div>
+            
+            <div className="export-format-card">
+              <h3>Format PDF</h3>
+              <p>Document PDF pour impression ou distribution.</p>
+              <button 
+                onClick={() => handleExport('pdf')}
+                className="export-button"
+                disabled={exportInProgress}
+              >
+                {exportInProgress ? 'Exportation en cours...' : 'Exporter en PDF'}
               </button>
             </div>
           </div>
@@ -111,17 +194,8 @@ const ExportPage = () => {
       </div>
       
       <div className="page-actions">
-        <button 
-          onClick={() => navigate(`/edit/${docId}`)}
-          className="secondary-button"
-        >
+        <button onClick={() => navigate(`/edit/${docId}`)}>
           Retour à l'édition
-        </button>
-        <button 
-          onClick={() => navigate('/')}
-          className="secondary-button"
-        >
-          Nouvelle importation
         </button>
       </div>
     </div>
