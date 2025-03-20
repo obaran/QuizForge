@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { generateQuestions } from '../services/api';
-import { QuestionType, TestMode, Difficulty } from '../types';
+import { generateQuestions, getReferentiels, getReferentielContent } from '../services/api';
+import { QuestionType, TestMode, Difficulty, ReferentielResponse } from '../types';
+import { FaEye, FaFileAlt } from 'react-icons/fa';
+import '../styles/GeneratePage.css';
 
 const GeneratePage = () => {
   const { docId } = useParams<{ docId: string }>();
@@ -16,10 +18,37 @@ const GeneratePage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // États pour le référentiel
+  const [referentiels, setReferentiels] = useState<ReferentielResponse[]>([]);
+  const [selectedReferentielId, setSelectedReferentielId] = useState<string | null>(null);
+  const [selectedReferentiel, setSelectedReferentiel] = useState<ReferentielResponse | null>(null);
+  const [isLoadingReferentiels, setIsLoadingReferentiels] = useState(false);
+  const [referentielContent, setReferentielContent] = useState<string | null>(null);
+  const [isViewingReferentiel, setIsViewingReferentiel] = useState(false);
+  const [referentielError, setReferentielError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!docId) {
       navigate('/');
     }
+    
+    // Charger les référentiels disponibles
+    const fetchReferentiels = async () => {
+      setIsLoadingReferentiels(true);
+      try {
+        const response = await getReferentiels();
+        if (response.success && response.data) {
+          setReferentiels(response.data.referentiels);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des référentiels:', error);
+        setReferentielError('Erreur lors du chargement des référentiels');
+      } finally {
+        setIsLoadingReferentiels(false);
+      }
+    };
+
+    fetchReferentiels();
   }, [docId, navigate]);
 
   const handleGenerate = async () => {
@@ -45,7 +74,8 @@ const GeneratePage = () => {
         questionType,
         testMode,
         difficulty,
-        numberOfQuestions: questionsToGenerate
+        numberOfQuestions: questionsToGenerate,
+        refId: selectedReferentielId // Ajouter l'ID du référentiel sélectionné
       });
 
       if (!response.success || !response.data) {
@@ -82,12 +112,127 @@ const GeneratePage = () => {
     setCustomNumberInput(e.target.value);
   };
 
+  // Gestion de la sélection d'un référentiel
+  const handleReferentielSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const refId = e.target.value;
+    setSelectedReferentielId(refId === 'none' ? null : refId);
+    
+    // Trouver le référentiel correspondant dans la liste
+    if (refId !== 'none') {
+      const selectedRef = referentiels.find(ref => ref.refId === refId);
+      setSelectedReferentiel(selectedRef || null);
+    } else {
+      setSelectedReferentiel(null);
+    }
+  };
+
+  // Visualiser le contenu d'un référentiel
+  const handleViewReferentiel = async () => {
+    if (!selectedReferentielId) {
+      setReferentielError('Veuillez sélectionner un référentiel');
+      return;
+    }
+
+    setIsViewingReferentiel(true);
+    try {
+      const response = await getReferentielContent(selectedReferentielId);
+      if (response.success && response.data) {
+        setReferentielContent(response.data.content);
+      } else {
+        throw new Error(response.error || 'Échec de la récupération du contenu');
+      }
+    } catch (err) {
+      setReferentielError(err instanceof Error ? err.message : 'Une erreur est survenue');
+    } finally {
+      setIsViewingReferentiel(false);
+    }
+  };
+
   return (
     <div className="generate-page">
       <h1>Générer des Questions</h1>
       <p className="description">
         Configurez les paramètres pour générer des questions à partir de votre document.
       </p>
+
+      {/* Section Référentiel */}
+      <div className="referentiel-section">
+        <h2>Référentiel pédagogique (optionnel)</h2>
+        <p className="description">
+          Sélectionnez un référentiel pour guider la génération des questions.
+        </p>
+
+        {/* Liste des référentiels existants */}
+        <div className="referentiels-list">
+          <h3>Référentiels disponibles</h3>
+          {isLoadingReferentiels ? (
+            <p>Chargement des référentiels...</p>
+          ) : referentiels.length > 0 ? (
+            <div className="file-management">
+              <div className="select-container">
+                <select 
+                  value={selectedReferentielId || 'none'} 
+                  onChange={handleReferentielSelect}
+                  className="referentiel-select"
+                  disabled={isGenerating}
+                >
+                  <option value="none">Aucun référentiel (optionnel)</option>
+                  {referentiels.map(ref => (
+                    <option key={ref.refId} value={ref.refId}>
+                      {ref.filename}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="file-actions">
+                <button 
+                  onClick={handleViewReferentiel}
+                  className="action-button view-button"
+                  disabled={!selectedReferentielId || isViewingReferentiel || isGenerating}
+                  title="Voir le contenu du référentiel"
+                >
+                  <FaEye /> {isViewingReferentiel ? 'Chargement...' : 'Voir'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="no-referentiels-message">
+              Aucun référentiel importé. L'utilisation d'un référentiel est optionnelle.
+            </p>
+          )}
+          
+          {selectedReferentiel && (
+            <div className="selected-file-info">
+              <h4>Référentiel sélectionné</h4>
+              <div className="selected-file-details">
+                <FaFileAlt className="file-icon" />
+                <div className="file-details">
+                  <p className="file-name">{selectedReferentiel.filename}</p>
+                  <p className="file-date">Importé le {new Date(selectedReferentiel.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {referentielContent && (
+            <div className="content-preview">
+              <h4>Contenu du référentiel</h4>
+              <div className="content-container">
+                <pre>{referentielContent.substring(0, 1000)}{referentielContent.length > 1000 ? '...' : ''}</pre>
+              </div>
+              <button 
+                onClick={() => setReferentielContent(null)} 
+                className="close-preview-button"
+              >
+                Fermer l'aperçu
+              </button>
+            </div>
+          )}
+
+          {referentielError && <div className="error-message">{referentielError}</div>}
+        </div>
+      </div>
 
       <div className="generate-form">
         <div className="form-group">
