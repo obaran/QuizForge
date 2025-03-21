@@ -98,7 +98,7 @@ describe('Export Service', () => {
       expect(result).toContain('</quiz>');
       
       expect(result).toContain('<question type="multichoice">');
-      expect(result).toContain('<name><text>Question q1</text></name>');
+      expect(result).toContain('<name><text>QuizForge Question 1</text></name>');
       expect(result).toContain('<questiontext format="html"><text><![CDATA[What is the capital of France?]]></text></questiontext>');
       expect(result).toContain('<single>true</single>');
       expect(result).toContain('<answer fraction="100" format="html">');
@@ -107,12 +107,12 @@ describe('Export Service', () => {
       expect(result).toContain('<text><![CDATA[London]]></text>');
       
       expect(result).toContain('<question type="multichoice">');
-      expect(result).toContain('<name><text>Question q2</text></name>');
+      expect(result).toContain('<name><text>QuizForge Question 2</text></name>');
       expect(result).toContain('<questiontext format="html"><text><![CDATA[Which of the following are planets in our solar system?]]></text></questiontext>');
       expect(result).toContain('<single>false</single>');
       
       expect(result).toContain('<question type="matching">');
-      expect(result).toContain('<name><text>Question q3</text></name>');
+      expect(result).toContain('<name><text>QuizForge Question 3</text></name>');
       expect(result).toContain('<questiontext format="html"><text><![CDATA[Match the countries with their capitals]]></text></questiontext>');
       expect(result).toContain('<subquestion format="html">');
       expect(result).toContain('<text><![CDATA[France]]></text>');
